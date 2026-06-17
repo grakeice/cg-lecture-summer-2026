@@ -1,0 +1,9 @@
+[package]
+name = "with_opencv"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nannou.workspace = true
+opencv.workspace = true

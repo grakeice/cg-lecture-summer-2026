@@ -1,0 +1,5 @@
+[tools]
+rust = "latest"
+
+[env]
+DYLD_FALLBACK_LIBRARY_PATH = "/Library/Developer/CommandLineTools/usr/lib"

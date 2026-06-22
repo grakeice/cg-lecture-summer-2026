@@ -21,7 +21,7 @@ impl OpticalFlow {
         )?;
 
         let mut flow = core::Mat::default();
-        if let Some(ref prev_gray) = self.prev_gray {
+        if let Some(prev_gray) = &self.prev_gray {
             video::calc_optical_flow_farneback(
                 prev_gray, &gray, &mut flow, 0.5, 3, 15, 3, 5, 1.2, 0,
             )?;

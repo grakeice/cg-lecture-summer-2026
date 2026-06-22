@@ -217,7 +217,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .stroke_color(STEELBLUE);
     }
 
-    if let Some(ref flow) = model.flow {
+    if let Some(flow) = &model.flow {
         if let Ok(avg_flow) = optical_flow::OpticalFlow::get_average_flow(flow) {
             draw.line()
                 .start(pt2(0.0, 0.0))

@@ -38,10 +38,12 @@ impl OpticalFlow {
 
     pub fn get_average_flow_in_region(
         flow: &core::Mat,
-        region: &core::Rect,
+        xy: Vec2,
+        wh: Vec2,
     ) -> opencv::Result<Vec2> {
         let mut avg_flow = Vec2::ZERO;
-        let roi = flow.roi(*region)?;
+        let region = core::Rect::new(xy.x as i32, xy.y as i32, wh.x as i32, wh.y as i32);
+        let roi = flow.roi(region)?;
         if let Ok(mean) = core::mean(&roi, &core::no_array()) {
             let dx = mean[0] as f32;
             let dy = -mean[1] as f32;
@@ -55,9 +57,23 @@ impl OpticalFlow {
         let flow = self.get_flow(frame)?;
         let avg_flow = OpticalFlow::get_average_flow_in_region(
             &flow,
-            &core::Rect::new(0, 0, frame.cols(), frame.rows()),
+            vec2(0.0, 0.0),
+            vec2(frame.cols() as f32, frame.rows() as f32),
         )?;
 
         Ok(OpticalFlowResult { avg_flow })
+    }
+
+    pub fn _get_flow_at(flow: &core::Mat, xy: Vec2) -> opencv::Result<Vec2> {
+        let mut avg_flow = Vec2::ZERO;
+        let region = core::Rect::new(xy.x as i32, xy.y as i32, 1, 1);
+        let roi = flow.roi(region)?;
+        if let Ok(mean) = core::mean(&roi, &core::no_array()) {
+            let dx = mean[0] as f32;
+            let dy = -mean[1] as f32;
+            avg_flow = vec2(dx, dy);
+        }
+
+        Ok(avg_flow)
     }
 }

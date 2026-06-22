@@ -4,6 +4,8 @@
 
 - Open CV C++ Library
 - clang
+- mise
+- Xcode Command Line Tools
 
 ## about training data
 

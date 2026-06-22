@@ -2,4 +2,8 @@
 rust = "latest"
 
 [env]
-DYLD_FALLBACK_LIBRARY_PATH = "/Library/Developer/CommandLineTools/usr/lib"
+DYLD_FALLBACK_LIBRARY_PATH = """
+{%- if os() == "macos" -%}
+/Library/Developer/CommandLineTools/usr/lib
+{%- endif -%}
+"""

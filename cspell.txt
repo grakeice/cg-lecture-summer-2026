@@ -5,6 +5,7 @@ bytemuck
 DYLD
 farneback
 frontalface
+grakeice
 haarcascade
 haarcascades
 highgui

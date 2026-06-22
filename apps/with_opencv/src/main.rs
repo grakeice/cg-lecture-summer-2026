@@ -1,22 +1,20 @@
 mod opencv_utils;
+mod face_detector;
+mod optical_flow;
 
 use nannou::prelude::*;
-use opencv::{core, objdetect, prelude::*, videoio};
+use opencv::{core, prelude::*, videoio};
 use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use opencv_utils::MatExt;
 
-struct ProcessedData {
-    faces: Vec<core::Rect>,
-    avg_flow: Vec2,
-}
-
 struct Model {
     texture: wgpu::Texture,
     image_receiver: Receiver<nannou::image::RgbaImage>,
-    data_receiver: Receiver<ProcessedData>,
+    faces_receiver: Receiver<face_detector::FaceDetectorResult>,
+    flow_receiver: Receiver<optical_flow::OpticalFlowResult>,
     faces: Vec<core::Rect>,
     avg_flow: Vec2,
 }
@@ -26,10 +24,13 @@ fn main() {
 }
 
 fn model(app: &App) -> Model {
-    let (cam_tx, cam_rx) = std::sync::mpsc::sync_channel::<core::Mat>(1);
+    let (face_cam_tx, face_cam_rx) = std::sync::mpsc::sync_channel::<core::Mat>(1);
+    let (flow_cam_tx, flow_cam_rx) = std::sync::mpsc::sync_channel::<core::Mat>(1);
     let (img_tx, img_rx) = channel::<nannou::image::RgbaImage>();
-    let (data_tx, data_rx) = channel::<ProcessedData>();
+    let (faces_tx, faces_rx) = channel::<face_detector::FaceDetectorResult>();
+    let (flow_tx, flow_rx) = channel::<optical_flow::OpticalFlowResult>();
 
+    // Camera Capture Thread
     thread::spawn(move || {
         let mut cam = videoio::VideoCapture::new(0, videoio::CAP_AVFOUNDATION)
             .expect("Unable to open camera with AVFoundation");
@@ -46,7 +47,8 @@ fn model(app: &App) -> Model {
                 if raw_frame.size().map(|s| s.width > 0).unwrap_or(false) {
                     let mut frame = opencv::core::Mat::default();
                     if core::flip(&raw_frame, &mut frame, 1).is_ok() {
-                        let _ = cam_tx.try_send(frame.clone());
+                        let _ = face_cam_tx.try_send(frame.clone());
+                        let _ = flow_cam_tx.try_send(frame.clone());
 
                         if let Ok(rgba_image) = frame.to_rgba_image() {
                             if img_tx.send(rgba_image).is_err() {
@@ -60,77 +62,57 @@ fn model(app: &App) -> Model {
         }
     });
 
+    // Face Detector Thread
     thread::spawn(move || {
-        let mut face_detector = {
-            let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-            let face_cascade_path =
-                manifest_dir.join("assets/haarcascades/haarcascade_frontalface_default.xml");
-            let face_cascade_path_str = face_cascade_path.to_str().unwrap().to_string();
-
-            objdetect::CascadeClassifier::new(&face_cascade_path_str)
-                .expect("Failed to load face cascade")
-        };
-        let mut faces = core::Vector::<core::Rect>::new();
-        let mut prev_gray: Option<core::Mat> = None;
+        let mut detector = face_detector::FaceDetector::new();
         let process_interval = Duration::from_millis(100);
 
         loop {
             let start_time = Instant::now();
 
-            let raw_frame = match cam_rx.recv() {
+            let raw_frame = match face_cam_rx.recv() {
                 Ok(f) => f,
                 Err(_) => break,
             };
 
             let mut latest_frame = raw_frame;
-            while let Ok(f) = cam_rx.try_recv() {
+            while let Ok(f) = face_cam_rx.try_recv() {
                 latest_frame = f;
             }
 
-            let mut gray = core::Mat::default();
-            if opencv::imgproc::cvt_color(
-                &latest_frame,
-                &mut gray,
-                opencv::imgproc::COLOR_BGR2GRAY,
-                0,
-                core::AlgorithmHint::ALGO_HINT_DEFAULT,
-            )
-            .is_ok()
-            {
-                let _ = face_detector.detect_multi_scale(
-                    &gray,
-                    &mut faces,
-                    1.1,
-                    3,
-                    0,
-                    core::Size::new(30, 30),
-                    core::Size::new(0, 0),
-                );
-
-                let mut avg_flow = Vec2::ZERO;
-                if let Some(ref prev_gray) = prev_gray {
-                    let mut flow = core::Mat::default();
-                    let flow_res = opencv::video::calc_optical_flow_farneback(
-                        prev_gray, &gray, &mut flow, 0.5, 3, 15, 3, 5, 1.2, 0,
-                    );
-
-                    if flow_res.is_ok() {
-                        if let Ok(mean) = core::mean(&flow, &core::no_array()) {
-                            let dx = mean[0] as f32;
-                            let dy = -mean[1] as f32;
-                            avg_flow = vec2(dx, dy);
-                        }
-                    }
+            if let Ok(result) = detector.get_frontalface(&latest_frame) {
+                if faces_tx.send(result).is_err() {
+                    break;
                 }
+            }
 
-                prev_gray = Some(gray.clone());
+            let elapsed = start_time.elapsed();
+            if elapsed < process_interval {
+                thread::sleep(process_interval - elapsed);
+            }
+        }
+    });
 
-                let data = ProcessedData {
-                    faces: faces.to_vec(),
-                    avg_flow,
-                };
+    // Optical Flow Thread
+    thread::spawn(move || {
+        let mut flow_calc = optical_flow::OpticalFlow::new();
+        let process_interval = Duration::from_millis(30);
 
-                if data_tx.send(data).is_err() {
+        loop {
+            let start_time = Instant::now();
+
+            let raw_frame = match flow_cam_rx.recv() {
+                Ok(f) => f,
+                Err(_) => break,
+            };
+
+            let mut latest_frame = raw_frame;
+            while let Ok(f) = flow_cam_rx.try_recv() {
+                latest_frame = f;
+            }
+
+            if let Ok(result) = flow_calc.get_flow(&latest_frame) {
+                if flow_tx.send(result).is_err() {
                     break;
                 }
             }
@@ -159,7 +141,8 @@ fn model(app: &App) -> Model {
     Model {
         texture,
         image_receiver: img_rx,
-        data_receiver: data_rx,
+        faces_receiver: faces_rx,
+        flow_receiver: flow_rx,
         faces: Vec::new(),
         avg_flow: Vec2::ZERO,
     }
@@ -186,14 +169,20 @@ fn update(app: &App, model: &mut Model, _update: Update) {
         queue.submit(Some(encoder.finish()));
     }
 
-    let mut latest_data = None;
-    while let Ok(data) = model.data_receiver.try_recv() {
-        latest_data = Some(data);
+    let mut latest_faces = None;
+    while let Ok(faces) = model.faces_receiver.try_recv() {
+        latest_faces = Some(faces);
+    }
+    if let Some(res) = latest_faces {
+        model.faces = res.faces;
     }
 
-    if let Some(data) = latest_data {
-        model.faces = data.faces;
-        model.avg_flow = data.avg_flow;
+    let mut latest_flow = None;
+    while let Ok(flow) = model.flow_receiver.try_recv() {
+        latest_flow = Some(flow);
+    }
+    if let Some(res) = latest_flow {
+        model.avg_flow = res.avg_flow;
     }
 }
 
@@ -227,3 +216,4 @@ fn view(app: &App, model: &Model, frame: Frame) {
 
     draw.to_frame(app, &frame).unwrap();
 }
+

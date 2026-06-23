@@ -1,51 +1,33 @@
+use bevy::prelude::Image;
+use opencv::core::{Mat, Vec4b};
 use opencv::prelude::*;
 
-pub trait MatExt {
-    fn to_rgba_image(&self) -> opencv::Result<nannou::image::RgbaImage>;
+pub trait ImageExt {
+    fn to_mat(&self) -> opencv::Result<Mat>;
 }
 
-impl MatExt for opencv::core::Mat {
-    fn to_rgba_image(&self) -> opencv::Result<nannou::image::RgbaImage> {
-        let mut rgba_mat = opencv::core::Mat::default();
+impl ImageExt for Image {
+    fn to_mat(&self) -> opencv::Result<Mat> {
+        let width = self.texture_descriptor.size.width as i32;
+        let height = self.texture_descriptor.size.height as i32;
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| opencv::Error::new(opencv::core::StsNullPtr, "Image data is None"))?;
 
-        let code = match self.channels() {
-            3 => opencv::imgproc::COLOR_BGR2RGBA,
-            4 => opencv::imgproc::COLOR_BGRA2RGBA,
-            _ => {
-                return Err(opencv::Error::new(
-                    opencv::core::StsError,
-                    "Unsupported channel count (must be BGR 3 channels or BGRA 4 channels)",
-                ));
-            }
-        };
+        // Bevy's Image contains RGBA pixel data
+        let rgba_mat = Mat::new_rows_cols_with_bytes::<Vec4b>(height, width, data)?;
+        let owned_rgba = rgba_mat.try_clone()?;
 
+        let mut bgr_mat = Mat::default();
         opencv::imgproc::cvt_color(
-            self,
-            &mut rgba_mat,
-            code,
+            &owned_rgba,
+            &mut bgr_mat,
+            opencv::imgproc::COLOR_RGBA2BGR,
             0,
             opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT,
         )?;
 
-        let continuous_mat = if rgba_mat.is_continuous() {
-            rgba_mat
-        } else {
-            rgba_mat.clone()
-        };
-
-        let bytes = continuous_mat.data_bytes()?;
-        let size = continuous_mat.size()?;
-        let width = size.width as u32;
-        let height = size.height as u32;
-
-        let image_buffer = nannou::image::RgbaImage::from_raw(width, height, bytes.to_vec())
-            .ok_or_else(|| {
-                opencv::Error::new(
-                    opencv::core::StsError,
-                    "Failed to create RgbaImage from raw bytes",
-                )
-            })?;
-
-        Ok(image_buffer)
+        Ok(bgr_mat)
     }
 }

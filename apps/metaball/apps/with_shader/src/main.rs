@@ -12,12 +12,14 @@ fn main() {
 
 #[derive(Clone)]
 struct Model {
-    window_id: Entity,
+    _window_id: Entity,
     balls: Vec<ball::Ball>,
     image_buffer: RgbaImage,
     texture: Arc<wgpu::Texture>,
     _texture_view: Arc<wgpu::TextureView>,
-    render_pipeline: Arc<wgpu::RenderPipeline>,
+    pipeline_layout: Arc<wgpu::PipelineLayout>,
+    shader: Arc<wgpu::ShaderModule>,
+    render_pipeline: Arc<std::sync::OnceLock<wgpu::RenderPipeline>>,
     bind_group: Arc<wgpu::BindGroup>,
 }
 
@@ -36,7 +38,7 @@ fn model(app: &App) -> Model {
     // Create the offscreen render target texture
     let texture = wgpu::TextureBuilder::new()
         .size([1024, 1024])
-        .format(Frame::TEXTURE_FORMAT)
+        .format(wgpu::TextureFormat::Rgba8Unorm)
         .usage(
             wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
@@ -70,26 +72,20 @@ fn model(app: &App) -> Model {
         ..Default::default()
     });
 
-    let render_pipeline = wgpu::RenderPipelineBuilder::from_layout(&pipeline_layout, &shader)
-        .fragment_shader(&shader)
-        .primitive_topology(wgpu::PrimitiveTopology::TriangleList)
-        .vertex_entry_point("vs_main")
-        .fragment_entry_point("fs_main")
-        .color_format(Frame::TEXTURE_FORMAT)
-        .build(device);
-
     let bind_group = wgpu::BindGroupBuilder::new()
         .texture_view(&texture_view)
         .sampler(&sampler)
         .build(device, &bind_group_layout);
 
     Model {
-        window_id,
+        _window_id: window_id,
         balls,
         image_buffer,
         texture: Arc::new(texture),
         _texture_view: Arc::new(texture_view),
-        render_pipeline: Arc::new(render_pipeline),
+        pipeline_layout: Arc::new(pipeline_layout),
+        shader: Arc::new(shader),
+        render_pipeline: Arc::new(std::sync::OnceLock::new()),
         bind_group: Arc::new(bind_group),
     }
 }
@@ -154,7 +150,17 @@ fn render(_app: &RenderApp, model: &Model, frame: Frame) {
         ..Default::default()
     });
 
-    render_pass.set_pipeline(&model.render_pipeline);
+    let render_pipeline = model.render_pipeline.get_or_init(|| {
+        wgpu::RenderPipelineBuilder::from_layout(&model.pipeline_layout, &model.shader)
+            .fragment_shader(&model.shader)
+            .primitive_topology(wgpu::PrimitiveTopology::TriangleList)
+            .vertex_entry_point("vs_main")
+            .fragment_entry_point("fs_main")
+            .color_format(frame.texture_format())
+            .build(device)
+    });
+
+    render_pass.set_pipeline(render_pipeline);
     render_pass.set_bind_group(0, &*model.bind_group, &[]);
     render_pass.draw(0..3, 0..1);
 }

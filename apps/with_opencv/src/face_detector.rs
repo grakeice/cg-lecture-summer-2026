@@ -1,4 +1,4 @@
-use opencv::{core, objdetect, prelude::*, imgproc};
+use opencv::{core, imgproc, objdetect, prelude::*};
 
 pub struct FaceDetectorResult {
     pub faces: Vec<core::Rect>,

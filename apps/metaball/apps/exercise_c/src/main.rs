@@ -10,11 +10,7 @@ fn main() {
 }
 
 fn model(app: &App) -> Model {
-    let _window = app
-        .new_window()
-        .size(1000, 1000)
-        .view(view)
-        .build();
+    let _window = app.new_window().size(1000, 1000).view(view).build();
 
     let assets = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
     let img_path = assets.join("images/skytree.jpg");
@@ -69,9 +65,13 @@ fn model(app: &App) -> Model {
     }
     let dynamic_image = nannou::image::DynamicImage::ImageRgba8(new_image_buffer);
 
-    let image = Image::from_dynamic(dynamic_image, true, bevy_asset::RenderAssetUsages::default());
+    let image = Image::from_dynamic(
+        dynamic_image,
+        true,
+        bevy_asset::RenderAssetUsages::default(),
+    );
     let texture = app.asset_server().add(image);
- 
+
     Model { texture }
 }
 

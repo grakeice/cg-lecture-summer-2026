@@ -15,11 +15,7 @@ fn main() {
 }
 
 fn model(app: &App) -> Model {
-    let _window = app
-        .new_window()
-        .size(1024, 1024)
-        .view(view)
-        .build();
+    let _window = app.new_window().size(1024, 1024).view(view).build();
 
     let width = 1024;
     let height = 1024;
@@ -53,7 +49,11 @@ fn model(app: &App) -> Model {
     }
 
     let dynamic_image = nannou::image::DynamicImage::ImageRgba8(image_buffer);
-    let image = Image::from_dynamic(dynamic_image, true, bevy_asset::RenderAssetUsages::default());
+    let image = Image::from_dynamic(
+        dynamic_image,
+        true,
+        bevy_asset::RenderAssetUsages::default(),
+    );
     let texture = app.asset_server().add(image);
 
     Model {
@@ -68,9 +68,7 @@ fn view(app: &App, model: &Model) {
     let draw = app.draw();
     draw.background().color(BLACK);
 
-    draw.rect()
-        .w_h(1024.0, 1024.0)
-        .texture(&model.texture);
+    draw.rect().w_h(1024.0, 1024.0).texture(&model.texture);
 
     // for metaball in model.metaballs.iter() {
     //     draw.ellipse()

@@ -18,7 +18,11 @@ fn model(app: &App) -> Model {
     let image_buffer = RgbaImage::new(width, height);
 
     let dynamic_image = nannou::image::DynamicImage::ImageRgba8(image_buffer.clone());
-    let image = Image::from_dynamic(dynamic_image, true, bevy_asset::RenderAssetUsages::default());
+    let image = Image::from_dynamic(
+        dynamic_image,
+        true,
+        bevy_asset::RenderAssetUsages::default(),
+    );
     let texture = app.asset_server().add(image);
 
     Model {

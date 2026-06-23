@@ -7,9 +7,9 @@ use crate::optical_flow::OpticalFlow;
 use nannou::prelude::*;
 use opencv::{core, prelude::*, videoio};
 use opencv_utils::MatExt;
-use std::sync::{Mutex, Arc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, channel};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -137,14 +137,14 @@ fn model(app: &App) -> Model {
     let width = first_image.width();
     let height = first_image.height();
 
-    let _window = app
-        .new_window()
-        .size(width, height)
-        .view(view)
-        .build();
+    let _window = app.new_window().size(width, height).view(view).build();
 
     let dynamic_image = nannou::image::DynamicImage::ImageRgba8(first_image);
-    let image = Image::from_dynamic(dynamic_image, true, bevy_asset::RenderAssetUsages::default());
+    let image = Image::from_dynamic(
+        dynamic_image,
+        true,
+        bevy_asset::RenderAssetUsages::default(),
+    );
     let texture = app.asset_server().add(image);
 
     Model {
@@ -199,7 +199,9 @@ fn view(app: &App, model: &Model) {
     let win_width = win_rect.w();
     let win_height = win_rect.h();
 
-    draw.rect().w_h(win_width, win_height).texture(&model.texture);
+    draw.rect()
+        .w_h(win_width, win_height)
+        .texture(&model.texture);
 
     for face in model.faces.iter() {
         let w = face.width as f32;

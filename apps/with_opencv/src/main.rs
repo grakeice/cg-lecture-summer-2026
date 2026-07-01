@@ -234,10 +234,7 @@ fn update(app: &App, model: &mut Model) {
 
     if let Some(flow) = &model.flow {
         if let Ok(ball_flow) = {
-            let ball_position = model
-                .ball
-                .position
-                .translate_to_screen_coords(app.window_rect());
+            let ball_position = model.ball.position.to_screen_coords(&app.window_rect());
             OpticalFlow::get_average_flow_in_region(
                 flow,
                 Rect::from_xy_wh(
